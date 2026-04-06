@@ -1,0 +1,44 @@
+model:
+  class_path: training.deltatok.DeltaTok
+  init_args:
+    # Task head paths for evaluation. Omit any to skip that dataset's metrics.
+    # Download pre-trained heads from the Model Zoo in the README.
+    # vspw_head_path: /path/to/seg-head-vspw/pytorch_model.bin
+    # cityscapes_head_path: /path/to/seg-head-cityscapes/pytorch_model.bin
+    # kitti_head_path: /path/to/depth-head-kitti/pytorch_model.bin
+    # rgb_head_path: /path/to/rgb-head-imagenet/pytorch_model.bin
+    network:
+      class_path: models.deltatok.DeltaTok
+      init_args:
+        backbone:
+          class_path: models.dinov3.DINOv3
+
+data:
+  class_path: datasets.module.DataModule
+  init_args:
+    frame_size: 512
+    # Training dataset (required for fit, ignored for validate).
+    # train_dataset_cfg:
+    #   class_path: datasets.kinetics.KineticsTrain
+    #   init_args:
+    #     root: /path/to/kinetics
+    #     num_frames: 2
+
+    # Validation datasets (required for validate, optional for fit).
+    # Uncomment and set root paths for each dataset you have.
+    # val_datasets_cfg:
+    #   vspw:
+    #     class_path: datasets.vspw.VSPWVal
+    #     init_args:
+    #       root: /path/to/VSPW
+    #   cityscapes:
+    #     class_path: datasets.cityscapes.CityscapesVal
+    #     init_args:
+    #       root: /path/to/cityscapes
+    #   kitti:
+    #     class_path: datasets.kitti.KITTIVal
+    #     init_args:
+    #       root: /path/to/kitti
+
+trainer:
+  gradient_clip_val: 1e-2

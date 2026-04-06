@@ -1,0 +1,10 @@
+jsonargparse[signatures]==4.46.0
+matplotlib==3.10.8
+wandb==0.24.1
+lightning==2.6.1
+torch==2.10.0
+torchvision==0.25.0
+torchmetrics==1.8.2
+decord==0.6.0
+transformers==5.0.0
+opencv-python==4.13.0.90
