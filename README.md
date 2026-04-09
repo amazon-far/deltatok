@@ -1,4 +1,4 @@
-# A Frame is Worth One Token: Efficient Generative World Modeling with Delta Tokens (CVPR 2026)
+# A Frame is Worth One Token: Efficient Generative World Modeling with Delta Tokens (CVPR 2026 Highlight)
 
 [![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b)](https://arxiv.org/abs/2604.04913)&nbsp;
 [![Models](https://img.shields.io/badge/Hugging_Face-Models-FFD21E?labelColor=555)](https://huggingface.co/collections/Amazon-FAR/deltatok)
