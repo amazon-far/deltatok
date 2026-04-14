@@ -53,8 +53,10 @@ class DeltaTok(Base):
 
         losses = []
         for horizon in self.eval_horizons:
-            ctx_len = num_frames - horizon
-            pred_feats, tgt_feats, ctx_feats = self.network(frames, ctx_len=ctx_len)
+            ctx_len = 0 if horizon >= num_frames else 1
+            pred_feats, tgt_feats, ctx_feats = self.network(
+                frames, horizon=horizon
+            )
             eval_feats = tgt_feats if self.eval_oracle else pred_feats
             loss = self._eval_horizon(
                 eval_feats,

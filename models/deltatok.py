@@ -97,14 +97,14 @@ class DeltaTok(nn.Module):
             load_sd(self, torch.load(ckpt_path))
 
     def forward(
-        self, frames: torch.Tensor, *_, ctx_len: int = 0
+        self, frames: torch.Tensor, *_, horizon: int | None = None
     ) -> (
         tuple[torch.Tensor, torch.Tensor]
         | tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     ):
         if self.training:
             return self._forward_train(frames)
-        return self._forward_eval(frames, ctx_len)
+        return self._forward_eval(frames, horizon or frames.shape[1])
 
     def encode(
         self, x: torch.Tensor, y: torch.Tensor, rope: tuple[torch.Tensor, torch.Tensor]
@@ -168,13 +168,13 @@ class DeltaTok(nn.Module):
         y_hat = self.decode(z, y[:, -2], rope)
         return y_hat, y[:, -1]
 
-    def rollout_init(self, frames: torch.Tensor, ctx_len: int) -> dict:
+    def rollout_init(self, frames: torch.Tensor, horizon: int) -> dict:
         y = self.backbone(frames)
         rope = self._rope(frames)
-        if ctx_len == 0:
+        if horizon == y.shape[1]:  # no context: start from black frame
             x = self.backbone(torch.zeros_like(frames[:, :1]))[:, 0]
         else:
-            x = y[:, ctx_len - 1]
+            x = y[:, -horizon - 1]
         return {"y": y, "rope": rope, "x": x}
 
     def rollout_step(
@@ -188,14 +188,16 @@ class DeltaTok(nn.Module):
 
     @torch.compiler.disable
     def _forward_eval(
-        self, frames: torch.Tensor, ctx_len: int
+        self, frames: torch.Tensor, horizon: int
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        state = self.rollout_init(frames, ctx_len)
+        state = self.rollout_init(frames, horizon)
         preds, tgts = [], []
-        for t in range(frames.shape[1] - ctx_len):
-            y_hat, y, state = self.rollout_step(state, ctx_len + t, None)
+        for t in range(horizon):
+            y_hat, y, state = self.rollout_step(
+                state, frames.shape[1] - horizon + t, None
+            )
             preds.append(y_hat)
             tgts.append(y)
         preds = torch.stack(preds, 1)
         tgts = torch.stack(tgts, 1)
-        return preds, tgts, state["y"][:, :ctx_len]
+        return preds, tgts, state["y"][:, : frames.shape[1] - horizon]

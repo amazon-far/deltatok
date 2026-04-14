@@ -67,6 +67,7 @@ class DataModule(LightningDataModule):
             pin_memory=True,
             prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
             persistent_workers=self.num_workers > 0,
+            multiprocessing_context="fork" if self.num_workers > 0 else None,
         )
 
     def val_dataloader(self) -> list[DataLoader]:
@@ -78,6 +79,7 @@ class DataModule(LightningDataModule):
                 pin_memory=True,
                 persistent_workers=self.num_workers > 0,
                 collate_fn=val_collate_fn,
+                multiprocessing_context="fork" if self.num_workers > 0 else None,
             )
             loader.dataset_name = name
             dataloaders.append(loader)

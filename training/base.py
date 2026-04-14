@@ -12,7 +12,6 @@ from lightning.pytorch.utilities import grad_norm
 from PIL import Image
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LambdaLR
-from torchmetrics import MeanMetric
 from torchmetrics.classification import MulticlassJaccardIndex
 from torchmetrics.regression import MeanSquaredError
 
@@ -24,7 +23,7 @@ from models.task_heads import DepthHead, RGBHead, SegHead
 TASK_HEAD_KEY = {SegHead: "seg", DepthHead: "depth"}
 GT_METRICS = {
     "seg": ["miou"],
-    "depth": ["rmse", "mae", "delta1"],
+    "depth": ["rmse"],
 }
 LABEL_VALID = {
     "seg": lambda labels: (labels != 255).any(),
@@ -39,33 +38,15 @@ def _valid_depth(
     return pred_depth.squeeze(1)[valid], gt_depth[valid]
 
 
-def _depth_mae(pred_depth: torch.Tensor, gt_depth: torch.Tensor) -> torch.Tensor:
-    pred_depth, gt_depth = _valid_depth(pred_depth, gt_depth)
-    return (pred_depth - gt_depth).abs()
-
-
-def _depth_delta1(
-    pred_depth: torch.Tensor, gt_depth: torch.Tensor, threshold: float = 1.25
-) -> torch.Tensor:
-    pred_depth, gt_depth = _valid_depth(pred_depth, gt_depth)
-    return (
-        torch.maximum(pred_depth / gt_depth, gt_depth / pred_depth) < threshold
-    ).float()
-
-
 METRIC_FACTORIES = {
     "seg_miou": lambda h: MulticlassJaccardIndex(
         h.head.out_channels, ignore_index=255, validate_args=False
     ),
     "depth_rmse": lambda h: MeanSquaredError(squared=False),
-    "depth_mae": lambda h: MeanMetric(),
-    "depth_delta1": lambda h: MeanMetric(),
 }
 METRIC_CALLS = {
     "seg_miou": lambda m, task_preds, labels: m(task_preds, labels),
     "depth_rmse": lambda m, task_preds, labels: m(*_valid_depth(task_preds, labels)),
-    "depth_mae": lambda m, task_preds, labels: m(_depth_mae(task_preds, labels)),
-    "depth_delta1": lambda m, task_preds, labels: m(_depth_delta1(task_preds, labels)),
 }
 
 

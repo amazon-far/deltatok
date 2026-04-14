@@ -63,7 +63,7 @@ wget -i https://s3.amazonaws.com/kinetics/700_2020/train/k700_2020_train_path.tx
 for f in k700_tars/*.tar.gz; do tar -xzf "$f" -C kinetics/train; done
 ```
 
-> Pre-extracted frames (as a directory of frame folders or a zip archive) are also supported for faster data loading. See [`datasets/kinetics.py`](datasets/kinetics.py) for details.
+> Pre-extracted frames (as a directory of frame folders or zip archives) are also supported for faster data loading. See [`datasets/kinetics.py`](datasets/kinetics.py) for details.
 
 ### VSPW (evaluation, ~43 GB)
 
