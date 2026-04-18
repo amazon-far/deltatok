@@ -1,3 +1,4 @@
+python-dotenv==1.1.1
 jsonargparse[signatures]==4.46.0
 matplotlib==3.10.8
 wandb==0.24.1

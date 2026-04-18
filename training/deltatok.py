@@ -23,21 +23,11 @@ class DeltaTok(Base):
         loss_fn: str = "log_cosh",
         lr_warmup_steps: int = 5000,
         num_plots: int = 4,
-        vspw_head_path: str | None = None,
-        cityscapes_head_path: str | None = None,
-        kitti_head_path: str | None = None,
-        rgb_head_path: str | None = None,
         ckpt_path: str | None = None,
-        compile_mode: str | None = None,
+        use_compile: bool | None = None,
     ):
         super().__init__(
             **{k: v for k, v in locals().items() if k not in ("self", "__class__")}
-        )
-        self._init_task_heads_and_metrics(
-            vspw_head_path,
-            cityscapes_head_path,
-            kitti_head_path,
-            rgb_head_path,
         )
 
     def validation_step(
@@ -118,8 +108,6 @@ class DeltaTok(Base):
         )
         oracle = self._apply_head(sample["all_feats"], task_head, frame_shape)[0]
         preds = self._apply_head(sample["eval_feats"], task_head, frame_shape)[0]
-        if align_fn := self.head_align.get(sample["dataset_name"]):
-            preds = align_fn(preds, labels[0, -len(preds) :])
         num_frames = sample["frames"].shape[1]
         num_preds = len(preds)
         frame_imgs = prepare_frame_imgs(
@@ -145,8 +133,8 @@ class DeltaTok(Base):
             sample["overlap"],
             sample["is_wide"],
         )
-        oracle = self._apply_head(sample["all_feats"], self.rgb_head, frame_shape)[0]
-        preds = self._apply_head(sample["eval_feats"], self.rgb_head, frame_shape)[0]
+        oracle = self._apply_head(sample["all_feats"], self.task_heads["rgb"], frame_shape)[0]
+        preds = self._apply_head(sample["eval_feats"], self.task_heads["rgb"], frame_shape)[0]
         num_frames = sample["frames"].shape[1]
         num_preds = len(preds)
         frame_imgs = prepare_frame_imgs(

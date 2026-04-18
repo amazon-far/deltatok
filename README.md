@@ -1,59 +1,64 @@
-# A Frame is Worth One Token: Efficient Generative World Modeling with Delta Tokens (CVPR 2026 Highlight)
+# A Frame is Worth One Token: Efficient Generative World Modeling with Delta Tokens
 
+[![CVPR 2026 Highlight](https://img.shields.io/badge/CVPR_2026-Highlight-1f7a8c)](https://cvpr.thecvf.com/virtual/2026/poster/38021)&nbsp;
 [![Paper](https://img.shields.io/badge/arXiv-Paper-b31b1b)](https://arxiv.org/abs/2604.04913)&nbsp;
 [![Models](https://img.shields.io/badge/Hugging_Face-Models-FFD21E?labelColor=555)](https://huggingface.co/collections/Amazon-FAR/deltatok)
 
-DeltaTok represents each video frame as a single token by compressing the frame-to-frame change in vision foundation model features. DeltaWorld uses these tokens to generate diverse plausible futures.
+DeltaTok compresses the frame-to-frame change in vision foundation model features into a single delta token, enabling DeltaWorld to efficiently generate diverse plausible futures.
 
 ## Model Zoo
 
-All models operate at 512x512 resolution with a frozen [DINOv3](https://github.com/facebookresearch/dinov3) ViT-B backbone (not included). The released DeltaTok and DeltaWorld are trained on Kinetics-700, while the paper uses a larger dataset. See [Training & Evaluation](#training--evaluation) and [Example Training Resources](#example-training-resources) for reproduction.
+All models operate at 512x512 resolution with a frozen [DINOv3](https://github.com/facebookresearch/dinov3) ViT-B backbone. The released DeltaTok and DeltaWorld are trained on Kinetics-700, while the paper uses a larger dataset. See [Training & Evaluation](#training--evaluation) and [Example Training Resources](#example-training-resources) for reproduction.
 
 ### Task Heads
 
-Evaluation heads for downstream tasks. Present-time metrics (on ground-truth features):
+Evaluation heads for downstream tasks:
 
-| Model | Dataset | Metric | Download |
-|-------|---------|--------|---------|
+| Task | Dataset | Metric | Download |
+|------|---------|--------|---------|
 | Segmentation | VSPW | mIoU: 58.4 | [![Download](https://img.shields.io/badge/Download-seg--head--vspw-FFD21E?labelColor=555)](https://huggingface.co/Amazon-FAR/seg-head-vspw) |
 | Segmentation | Cityscapes | mIoU: 70.5 | [![Download](https://img.shields.io/badge/Download-seg--head--cityscapes-FFD21E?labelColor=555)](https://huggingface.co/Amazon-FAR/seg-head-cityscapes) |
 | Depth | KITTI | RMSE: 2.79 | [![Download](https://img.shields.io/badge/Download-depth--head--kitti-FFD21E?labelColor=555)](https://huggingface.co/Amazon-FAR/depth-head-kitti) |
-| RGB | ImageNet | — | [![Download](https://img.shields.io/badge/Download-rgb--head--imagenet-FFD21E?labelColor=555)](https://huggingface.co/Amazon-FAR/rgb-head-imagenet) |
+| RGB | ImageNet | visualization only | [![Download](https://img.shields.io/badge/Download-rgb--head--imagenet-FFD21E?labelColor=555)](https://huggingface.co/Amazon-FAR/rgb-head-imagenet) |
 
 ### DeltaTok (Tokenizer) [![Download](https://img.shields.io/badge/Download-deltatok--kinetics-FFD21E?labelColor=555)](https://huggingface.co/Amazon-FAR/deltatok-kinetics)
 
-ViT-B encoder and decoder trained on Kinetics-700. Metrics show downstream task performance after encoding and decoding through DeltaTok.
+ViT-B encoder and decoder trained on Kinetics-700. Reconstruction quality is measured by applying downstream task heads to the reconstructed features.
 
-| Horizon | VSPW mIoU | Cityscapes mIoU | KITTI RMSE |
-|---------|-----------------|-----------|------------|
+| Horizon | VSPW mIoU (↑) | Cityscapes mIoU (↑) | KITTI RMSE (↓) |
+|---------|---------------|---------------------|----------------|
 | Short (1 frame) | 58.6 | 69.6 | 2.78 |
-| Mid (3 frames) | 58.5 | 67.9 | 2.86 |
+| Mid (3 frames)* | 58.5 | 67.9 | 2.86 |
+
+*Parallel encoding from ground-truth frames with autoregressive decoding from previous reconstructions.
 
 ### DeltaWorld (Predictor) [![Download](https://img.shields.io/badge/Download-deltaworld--kinetics-FFD21E?labelColor=555)](https://huggingface.co/Amazon-FAR/deltaworld-kinetics)
 
-ViT-B predictor trained on Kinetics-700. Evaluation generates 20 random samples. Best selects the closest to ground truth, mean averages all predicted features before evaluation.
+ViT-B predictor trained on Kinetics-700. Prediction quality is measured by applying downstream task heads to the predicted features. Cells report *best*-of-20 with *mean* in parentheses. *best* selects the sample with lowest DINOv3-feature loss to ground truth; *mean* averages DINOv3 features across all samples before evaluation.
 
-| Horizon | Mode | VSPW mIoU | Cityscapes mIoU | KITTI RMSE |
-|---------|------|-----------------|-----------|------------|
-| Short (1 frame) | *Copy last* | *51.2* | *53.5* | *3.76* |
-| Short (1 frame) | Best (mean) | 56.3 (54.2) | 66.2 (64.2) | 2.95 (3.32) |
-| Mid (3 frames) | *Copy last* | *44.3* | *39.6* | *4.86* |
-| Mid (3 frames) | Best (mean) | 51.5 (46.6) | 55.3 (49.5) | 3.71 (4.74) |
+| Method | Horizon | VSPW mIoU (↑) | Cityscapes mIoU (↑) | KITTI RMSE (↓) |
+|--------|---------|---------------|---------------------|----------------|
+| *Copy last (lower bound)* | *Short (1 frame)* | *51.2* | *53.5* | *3.76* |
+| DeltaWorld | Short (1 frame) | 56.3 (54.2) | 66.2 (64.2) | 2.95 (3.32) |
+| *Copy last (lower bound)* | *Mid (3 frames)* | *44.3* | *39.6* | *4.86* |
+| DeltaWorld | Mid (3 frames) | 51.5 (46.6) | 55.3 (49.5) | 3.71 (4.74) |
 
 ## Setup
 
-Requires [Miniconda](https://docs.anaconda.com/miniconda/) (or Anaconda).
+Requires [Miniconda](https://docs.anaconda.com/miniconda/) (or Anaconda), a [Weights & Biases](https://wandb.ai/) account for logging, and a [Hugging Face](https://huggingface.co/) account. Accept the license at [facebook/dinov3-vitb16-pretrain-lvd1689m](https://huggingface.co/facebook/dinov3-vitb16-pretrain-lvd1689m) so the gated DINOv3 ViT-B backbone downloads automatically on first run.
 
 ```bash
 conda create -n deltatok python=3.14.2
 conda activate deltatok
 pip install -r requirements.txt
-wandb login  # for experiment logging via Weights & Biases
+wandb login
+hf auth login
+cp .env.example .env
 ```
 
 ## Data Preparation
 
-In the config files under `configs/`, uncomment the dataset sections you need and replace `/path/to/<dataset>` with your absolute paths. Training requires `train_dataset_cfg` (Kinetics), evaluation requires `val_datasets_cfg` (VSPW, Cityscapes, KITTI).
+Prepare Kinetics-700 to train from scratch, and any of VSPW, Cityscapes, or KITTI for evaluation metrics and visualizations on that dataset. For each dataset you prepare, set the corresponding `*_ROOT` path in `.env` to the absolute path of the downloaded dataset directory.
 
 ### Kinetics-700 (training, ~1.2 TB)
 
@@ -99,7 +104,15 @@ done
 
 ## Training & Evaluation
 
-Training and evaluation use [Lightning CLI](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.cli.LightningCLI.html). See [Notes](#notes) for GPU scaling.
+Training and evaluation use [Lightning CLI](https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.cli.LightningCLI.html). To get evaluation metrics and visualizations on a dataset, download the pre-trained [task head](#task-heads) for that dataset and set the corresponding `*_HEAD_PATH` in `.env` to the absolute path of the downloaded file.
+
+The effective batch size should be 1024 for both DeltaTok and DeltaWorld. It's the product of four parameters:
+
+```
+--data.batch_size × --trainer.devices × --trainer.num_nodes × --trainer.accumulate_grad_batches
+```
+
+The default config reaches this on a single node with 8 GPUs at per-GPU batch size 128 and no gradient accumulation; adjust any of the four parameters to fit your hardware. See [Example Training Resources](#example-training-resources) for the configurations we used for each stage.
 
 ### Training DeltaTok (Tokenizer)
 
@@ -107,79 +120,74 @@ Training and evaluation use [Lightning CLI](https://lightning.ai/docs/pytorch/st
 ```bash
 python main.py fit -c configs/deltatok_vitb_dinov3_vitb_kinetics.yaml \
   --data.frame_size=256 \
-  --model.compile_mode=default \
   --trainer.max_steps=1000000
 ```
 
-**Stage 2: High-resolution fine-tune at 512px** (from stage 1 checkpoint, step counter resets)
+**Stage 2: High-resolution fine-tune at 512px**
+
+`--model.ckpt_path` loads model weights only; optimizer state and step counter reset.
 ```bash
 python main.py fit -c configs/deltatok_vitb_dinov3_vitb_kinetics.yaml \
   --model.lr=1e-4 \
-  --model.compile_mode=default \
   --trainer.max_steps=500000 \
   --model.ckpt_path=path/to/stage1/last.ckpt
 ```
 
-**Stage 3-4: LR cooldowns** (resume full training state, only change LR)
+**Stage 3-4: LR cooldowns**
+
+`--ckpt_path` resumes full training state (model weights, optimizer state, step counter).
 ```bash
 # Stage 3
 python main.py fit -c configs/deltatok_vitb_dinov3_vitb_kinetics.yaml \
   --model.lr=1e-5 \
-  --model.compile_mode=default \
   --trainer.max_steps=550000 \
   --ckpt_path=path/to/stage2/last.ckpt
 
 # Stage 4
 python main.py fit -c configs/deltatok_vitb_dinov3_vitb_kinetics.yaml \
   --model.lr=1e-6 \
-  --model.compile_mode=default \
   --trainer.max_steps=600000 \
   --ckpt_path=path/to/stage3/last.ckpt
 ```
 
 ### Training DeltaWorld (Predictor)
 
-Requires a trained DeltaTok checkpoint: either the [released tokenizer](https://huggingface.co/Amazon-FAR/deltatok-kinetics) (`pytorch_model.bin`) or `last.ckpt` from your own training.
+Requires a DeltaTok checkpoint: either the [released one](https://huggingface.co/Amazon-FAR/deltatok-kinetics) (`pytorch_model.bin`) or one from your own training (`last.ckpt`).
 
 ```bash
 python main.py fit -c configs/deltaworld_vitb_dinov3_vitb_kinetics.yaml \
   --model.network.tokenizer.ckpt_path=path/to/deltatok-kinetics/pytorch_model.bin \
-  --model.compile_mode=default \
   --trainer.max_steps=300000
 ```
 
-**LR cooldown** (resume full training state, only change LR)
+**LR cooldown**
 ```bash
 python main.py fit -c configs/deltaworld_vitb_dinov3_vitb_kinetics.yaml \
   --model.lr=1e-5 \
-  --model.compile_mode=default \
   --trainer.max_steps=305000 \
   --ckpt_path=path/to/deltaworld/last.ckpt
 ```
 
 ### Evaluation
 
+**DeltaTok**
 ```bash
-# DeltaTok
 python main.py validate -c configs/deltatok_vitb_dinov3_vitb_kinetics.yaml \
   --model.ckpt_path=path/to/deltatok-kinetics/pytorch_model.bin
+```
 
-# DeltaWorld (requires both tokenizer and predictor checkpoints)
+**DeltaWorld**
+
+Requires both DeltaTok and DeltaWorld checkpoints.
+```bash
 python main.py validate -c configs/deltaworld_vitb_dinov3_vitb_kinetics.yaml \
   --model.ckpt_path=path/to/deltaworld-kinetics/pytorch_model.bin \
   --model.network.tokenizer.ckpt_path=path/to/deltatok-kinetics/pytorch_model.bin
 ```
 
-> Task head paths are configured in the config files (commented out by default). Uncomment and set paths for each task head you have. Omit any to skip that dataset's metrics. Download pre-trained task heads from the [Model Zoo](#task-heads).
-
-### Notes
-
-- **GPU scaling**: The default config uses 8 GPUs with batch size 128 (effective 1024). Scale `--data.batch_size` to keep the effective batch size at 1024 when changing `--trainer.devices` or `--trainer.num_nodes`. Gradient accumulation (`--trainer.accumulate_grad_batches`) can also be used to reach the target batch size with fewer GPUs.
-- **`--ckpt_path` vs `--model.ckpt_path`**: `--ckpt_path` resumes full training state (model, optimizer, step) from a Lightning checkpoint. `--model.ckpt_path` loads model weights only (for evaluation or starting a new stage). The released checkpoints contain model weights only.
-
 ## Example Training Resources
 
-Training times and memory measured on NVIDIA H200 GPUs with bf16 mixed precision and torch.compile. The GPU counts below are what we used; any configuration that maintains an effective batch size of 1024 works (see [Notes](#notes)).
+Training times and memory are measured on NVIDIA H200 GPUs. The configurations below are examples; any setup that reaches the target [effective batch size](#training--evaluation) works.
 
 ### DeltaTok
 

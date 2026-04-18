@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +20,6 @@ for _id, _train in {
 class CityscapesVal(VidValDataset):
     def __init__(
         self,
-        root: str,
         num_frames: int = 7,
         frame_size: int = 256,
         time_stride_seconds: float = 0.1875,
@@ -34,9 +34,9 @@ class CityscapesVal(VidValDataset):
         )
         self.fps = fps
 
-        root = Path(root)
-        self.frames_dir = root / "leftImg8bit_sequence" / "val"
-        label_dir = root / "gtFine" / "val"
+        root_dir = Path(os.environ["CITYSCAPES_ROOT"])
+        self.frames_dir = root_dir / "leftImg8bit_sequence" / "val"
+        label_dir = root_dir / "gtFine" / "val"
         stride_frames = int(self.time_stride_seconds * self.fps)
 
         for label_path in sorted(label_dir.rglob("*_gtFine_labelIds.png")):

@@ -39,7 +39,8 @@ def _cached_lines(key: str, fetch: callable) -> list[str]:
 
 def load_local_paths(root: str, pattern: str) -> list[str]:
     return _cached_lines(
-        f"{root}:{pattern}", lambda: [str(path) for path in sorted(Path(root).glob(pattern))]
+        f"{root}:{pattern}",
+        lambda: [str(path) for path in sorted(Path(root).glob(pattern))],
     )
 
 
@@ -52,8 +53,11 @@ class SplitFile:
 
     def __init__(self, path: str):
         self._parts = (
-            [path] if os.path.exists(path) else
-            sorted(str(p) for p in Path(path).parent.glob(Path(path).name + ".part*"))
+            [path]
+            if os.path.exists(path)
+            else sorted(
+                str(p) for p in Path(path).parent.glob(Path(path).name + ".part*")
+            )
         )
         if not self._parts:
             raise FileNotFoundError(path)
@@ -73,18 +77,28 @@ class SplitFile:
             size -= n
 
     def seek(self, offset, whence=0):
-        if whence == 0: self._pos = offset
-        elif whence == 1: self._pos += offset
-        elif whence == 2: self._pos = self._cum[-1] + offset
+        if whence == 0:
+            self._pos = offset
+        elif whence == 1:
+            self._pos += offset
+        elif whence == 2:
+            self._pos = self._cum[-1] + offset
         return self._pos
 
-    def tell(self): return self._pos
-    def seekable(self): return True
-    def readable(self): return True
+    def tell(self):
+        return self._pos
+
+    def seekable(self):
+        return True
+
+    def readable(self):
+        return True
 
     def read(self, size=-1):
-        if size < 0: size = self._cum[-1] - self._pos
-        if size <= 0: return b""
+        if size < 0:
+            size = self._cum[-1] - self._pos
+        if size <= 0:
+            return b""
         if not self._fhs:
             self._fhs = [open(p, "rb") for p in self._parts]
         bufs = []
@@ -95,12 +109,17 @@ class SplitFile:
         return b"".join(bufs)
 
     def close(self):
-        for fh in self._fhs or []: fh.close()
-        for fd in self._fds or []: os.close(fd)
+        for fh in self._fhs or []:
+            fh.close()
+        for fd in self._fds or []:
+            os.close(fd)
         self._fhs = self._fds = None
 
-    def __enter__(self): return self
-    def __exit__(self, *a): self.close()
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
 
     def pread(self, size, offset):
         if not self._fds:

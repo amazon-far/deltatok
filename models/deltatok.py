@@ -20,8 +20,6 @@ class DeltaTok(nn.Module):
         backbone: nn.Module,
         num_hidden_layers=12,
         use_delta=True,
-        use_decoder_head: bool | None = None,
-        use_decoder_xy_embed: bool | None = None,
         layer_scale_init=1e-5,
         use_qk_norm=True,
         use_gated_attn=True,
@@ -30,14 +28,8 @@ class DeltaTok(nn.Module):
         ckpt_path: str | None = None,
     ):
         super().__init__()
-        ckpt_path = None if ckpt_path == "None" else ckpt_path
+        self.ckpt_path = ckpt_path
         self.use_delta = use_delta
-        self.use_decoder_head = (
-            use_decoder_head if use_decoder_head is not None else not use_delta
-        )
-        self.use_decoder_xy_embed = (
-            use_decoder_xy_embed if use_decoder_xy_embed is not None else not use_delta
-        )
         self.backbone = backbone.requires_grad_(False).eval()
 
         cfg = AutoConfig.from_pretrained(DINOV3_TEMPLATE)
@@ -58,8 +50,7 @@ class DeltaTok(nn.Module):
 
         self.z_embed = nn.Embedding(1, self.backbone.hidden_size)
         nn.init.trunc_normal_(self.z_embed.weight, std=cfg.initializer_range)
-        num_xy = 2 if (use_delta or self.use_decoder_xy_embed) else 1
-        self.xy_embed = nn.Embedding(num_xy, self.backbone.hidden_size)
+        self.xy_embed = nn.Embedding(2, self.backbone.hidden_size)
         nn.init.trunc_normal_(self.xy_embed.weight, std=cfg.initializer_range)
 
         self.encoder_blocks = nn.ModuleList(
@@ -82,16 +73,6 @@ class DeltaTok(nn.Module):
                 enable_gated_attn(blk)
 
         self.norm = nn.LayerNorm(self.backbone.hidden_size, cfg.layer_norm_eps)
-
-        if self.use_decoder_head:
-            self.decoder_norm = nn.LayerNorm(
-                self.backbone.hidden_size, cfg.layer_norm_eps
-            )
-            self.decoder_head = nn.Linear(
-                self.backbone.hidden_size, self.backbone.hidden_size
-            )
-            nn.init.trunc_normal_(self.decoder_head.weight, std=cfg.initializer_range)
-            nn.init.zeros_(self.decoder_head.bias)
 
         if ckpt_path:
             load_sd(self, torch.load(ckpt_path))
@@ -124,7 +105,7 @@ class DeltaTok(nn.Module):
                 torch.cat((rope[1], rope[1]), -2),
             )
         else:
-            hidden = torch.cat((z, y + self.xy_embed.weight[-1]), 1)
+            hidden = torch.cat((z, y + self.xy_embed.weight[1]), 1)
         for blk in self.encoder_blocks:
             hidden = blk(hidden, position_embeddings=rope)
         z = hidden[:, :1]
@@ -134,19 +115,11 @@ class DeltaTok(nn.Module):
         self, z: torch.Tensor, x: torch.Tensor, rope: tuple[torch.Tensor, torch.Tensor]
     ) -> torch.Tensor:
         if not self.use_delta:
-            if self.use_decoder_xy_embed:
-                x = self.xy_embed.weight[0][None, None].repeat(
-                    x.shape[0], x.shape[1], 1
-                )
-            else:
-                x = x.new_zeros(x.shape)
+            x = self.xy_embed.weight[0][None, None].expand_as(x)
         hidden = torch.cat((z, x), 1)
         for blk in self.decoder_blocks:
             hidden = blk(hidden, position_embeddings=rope)
-        y_hat = hidden[:, 1:]
-        if self.use_decoder_head:
-            y_hat = self.decoder_head(self.decoder_norm(y_hat))
-        return y_hat
+        return hidden[:, 1:]
 
     def tokenize_offline(
         self,

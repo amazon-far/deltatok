@@ -1,3 +1,4 @@
+.env
 datasets/.cache/
 
 __pycache__/

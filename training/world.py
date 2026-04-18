@@ -28,21 +28,11 @@ class World(Base):
         eval_copy_last: bool = False,
         lr_warmup_steps: int = 5000,
         num_plots: int = 4,
-        vspw_head_path: str | None = None,
-        cityscapes_head_path: str | None = None,
-        kitti_head_path: str | None = None,
-        rgb_head_path: str | None = None,
         ckpt_path: str | None = None,
-        compile_mode: str | None = None,
+        use_compile: bool | None = None,
     ):
         super().__init__(
             **{k: v for k, v in locals().items() if k not in ("self", "__class__")}
-        )
-        self._init_task_heads_and_metrics(
-            vspw_head_path,
-            cityscapes_head_path,
-            kitti_head_path,
-            rgb_head_path,
         )
 
     def validation_step(
@@ -214,8 +204,6 @@ class World(Base):
             if rollout is None:
                 continue
             preds = self._apply_head(rollout, task_head, sample["frame_shape"])[0]
-            if align_fn := self.head_align.get(sample["dataset_name"]):
-                preds = align_fn(preds, sample["labels"][0, -len(preds) :])
             pred_task = torch.cat([all_oracle[: sample["ctx_len"]], preds], dim=0)
             gt_vis, oracle_vis, pred_vis = VIS_FNS[task_key](
                 all_oracle, sample["labels"][0], pred_task
@@ -231,7 +219,7 @@ class World(Base):
     def _plot_rgb(self, sample: dict) -> None:
         def decode(f: torch.Tensor) -> torch.Tensor:
             return self._apply_head_to_rollouts(
-                f[None, None], self.rgb_head, horizon_frames.shape
+                f[None, None], self.task_heads["rgb"], horizon_frames.shape
             )[0, 0]
 
         def to_imgs(preds: torch.Tensor) -> list:

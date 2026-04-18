@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import numpy as np
@@ -35,7 +36,6 @@ def apply_garg_mask(depth: np.ndarray) -> np.ndarray:
 class KITTIVal(VidValDataset):
     def __init__(
         self,
-        root: str,
         num_frames: int = 7,
         frame_size: int = 256,
         time_stride_seconds: float = 0.2,
@@ -50,7 +50,7 @@ class KITTIVal(VidValDataset):
         )
         self.fps = fps
 
-        root = Path(root)
+        root = Path(os.environ["KITTI_ROOT"])
         split_file = Path(__file__).parent / "kitti_eigen_test.txt"
 
         with open(split_file) as f:

@@ -1,3 +1,5 @@
+import logging
+import os
 from typing import Any
 
 import torch
@@ -17,7 +19,7 @@ def val_collate_fn(batch: list[tuple]) -> tuple[torch.Tensor, ...]:
     )
 
 
-def _load_cls(cls_path: str) -> type[TrainDataset | ValDataset]:
+def _load_cls(cls_path: str) -> type:
     module_path, cls_name = cls_path.rsplit(".", 1)
     return getattr(__import__(module_path, fromlist=[cls_name]), cls_name)
 
@@ -46,17 +48,21 @@ class DataModule(LightningDataModule):
         )
 
     def setup(self, stage: str | None = None) -> None:
-        if self.train_dataset_cfg is not None:
+        if self.train_dataset_cfg is not None and stage == "fit":
             cls = _load_cls(self.train_dataset_cfg["class_path"])
             self.train_dataset = cls(
-                **self.train_dataset_cfg["init_args"], frame_size=self.frame_size
+                **self.train_dataset_cfg.get("init_args", {}), frame_size=self.frame_size
             )
 
         self.val_datasets = {}
         for name, cfg in (self.val_datasets_cfg or {}).items():
+            env_var = f"{name.upper()}_ROOT"
+            if not os.environ.get(env_var):
+                logging.info("Skipping %s dataset: %s not set", name, env_var)
+                continue
             cls = _load_cls(cfg["class_path"])
             self.val_datasets[name] = cls(
-                **cfg["init_args"], frame_size=self.frame_size
+                **cfg.get("init_args", {}), frame_size=self.frame_size
             )
 
     def train_dataloader(self) -> DataLoader:

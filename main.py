@@ -1,12 +1,13 @@
-import json
 import logging
 import sys
 import warnings
 from datetime import datetime
+from importlib.metadata import distributions
 from pathlib import Path
 from typing import Any
 
 import torch
+from dotenv import load_dotenv
 from lightning import Trainer
 from lightning.pytorch import cli
 from lightning.pytorch.callbacks import (
@@ -20,46 +21,32 @@ from training.base import Base
 
 
 class LogRun(Callback):
+    """Capture everything needed to reproduce the run."""
+
     def setup(self, trainer: Trainer, pl_module: Base, stage: str) -> None:
-        if trainer.logger is not None and hasattr(
-            trainer.logger.experiment, "log_code"
-        ):
+        if trainer.logger is not None:
             trainer.logger.experiment.log_code(
-                ".",
-                include_fn=lambda filename: filename.endswith((".py", ".yaml")),
+                ".", include_fn=lambda filename: filename.endswith((".py", ".yaml", ".env"))
             )
 
     def on_train_start(self, trainer: Trainer, pl_module: Base) -> None:
         if not trainer.is_global_zero or trainer.logger is None:
             return
-
         experiment = trainer.logger.experiment
-        if not hasattr(experiment, "dir") or experiment.dir is None:
-            return
 
-        step = trainer.global_step
+        if Path(experiment.dir).exists():
+            pkgs = sorted(f"{d.name}=={d.version}" for d in distributions())
+            pkg_path = Path(experiment.dir) / f"pip-freeze-step{trainer.global_step}.txt"
+            pkg_path.write_text("\n".join(pkgs))
+            experiment.save(str(pkg_path), policy="now")
 
-        metadata_path = Path(experiment.dir) / "wandb-metadata.json"
-        snapshot = json.loads(metadata_path.read_text()) if metadata_path.exists() else {}
-        snapshot |= {
-            "step": step,
-            "timestamp": datetime.now().isoformat(),
-            "command": sys.argv,
-            "config": dict(experiment.config),
-        }
-        file_name = f"session_{step}.json"
-        (Path(experiment.dir) / file_name).write_text(
-            json.dumps(snapshot, indent=2, default=str)
-        )
-        experiment.save(file_name, policy="now")
-
-        entry = f"[step {step}] {snapshot['timestamp']}\n$ {' '.join(sys.argv)}"
-        notes = experiment.notes or ""
-        experiment.notes = f"{notes}\n{entry}".strip()
+        entry = f"[step {trainer.global_step}] {datetime.now().isoformat()}\n$ {' '.join(sys.argv)}"
+        experiment.notes = f"{experiment.notes or ''}\n{entry}".strip()
 
 
 class LightningCLI(cli.LightningCLI):
     def __init__(self, *args: Any, **kw: Any) -> None:
+        load_dotenv()
         torch.set_float32_matmul_precision("high")
         torch.backends.cudnn.benchmark = True
         torch._dynamo.config.capture_scalar_outputs = True

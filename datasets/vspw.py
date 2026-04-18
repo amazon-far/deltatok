@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import numpy as np
@@ -10,7 +11,6 @@ from datasets.base import VidValDataset, read_frame_paths
 class VSPWVal(VidValDataset):
     def __init__(
         self,
-        root: str,
         num_frames: int = 7,
         frame_size: int = 256,
         time_stride_seconds: float = 0.2,
@@ -27,7 +27,7 @@ class VSPWVal(VidValDataset):
         self.fps = fps
         self.eval_frame_interval = eval_frame_interval
 
-        root = Path(root)
+        root = Path(os.environ["VSPW_ROOT"])
         split_file = root / "val.txt"
         with open(split_file, "r") as f:
             vid_names = [line.strip() for line in f if line.strip()]
@@ -40,7 +40,9 @@ class VSPWVal(VidValDataset):
             labels_path = vid_path / "mask"
 
             img_files = sorted(
-                path for path in origin_path.glob("*.jpg") if not path.name.startswith("._")
+                path
+                for path in origin_path.glob("*.jpg")
+                if not path.name.startswith("._")
             )
             stride_frames = int(self.time_stride_seconds * self.fps)
 

@@ -1,4 +1,6 @@
+import logging
 import math
+import os
 from collections import defaultdict
 
 import lightning
@@ -137,70 +139,28 @@ def preprocess_validation_batch(
     return frames, timestamps, labels, sample_idx, overlap, is_wide
 
 
-def _extract_head_sd(ckpt: dict) -> dict:
-    while isinstance(ckpt, dict) and isinstance(ckpt.get("state_dict"), dict):
-        ckpt = ckpt["state_dict"]
-
-    if not isinstance(ckpt, dict):
-        return ckpt
-
-    if tensors := {k: v for k, v in ckpt.items() if torch.is_tensor(v)}:
-        return tensors
-
-    for v in ckpt.values():
-        if isinstance(v, dict):
-            result = _extract_head_sd(v)
-            if isinstance(result, dict) and any(
-                torch.is_tensor(x) for x in result.values()
-            ):
-                return result
-    return ckpt
-
-
-def _canonicalize(k: str) -> str:
-    for old, new in [
-        ("_orig_mod.", ""),
-        ("network.", ""),
-    ]:
-        k = k.replace(old, new)
-    return k
-
-
-def load_sd(
-    module: nn.Module, sd: dict, allow_unmapped: bool = False
-) -> torch._C._IncompatibleKeys:
+def load_sd(module: nn.Module, sd: dict) -> torch._C._IncompatibleKeys:
     sd = sd.get("state_dict", sd)
+    module = getattr(module, "_orig_mod", module)
     module_sd = module.state_dict()
-    canon_to_actual = {_canonicalize(k): k for k in module_sd}
 
     used = {}
-
+    unmapped = []
     for ckpt_key, tensor in sd.items():
-        canon_key = _canonicalize(ckpt_key)
-        if canon_key in canon_to_actual:
-            actual_key = canon_to_actual[canon_key]
-            if (
-                tensor.shape != module_sd[actual_key].shape
-                and tensor.numel() == module_sd[actual_key].numel()
-            ):
-                tensor = tensor.reshape(module_sd[actual_key].shape)
-            used[actual_key] = tensor
+        if ckpt_key not in module_sd:
+            continue
+        if tensor.shape != module_sd[ckpt_key].shape:
+            unmapped.append(ckpt_key)
+            continue
+        used[ckpt_key] = tensor
 
-    result = module.load_state_dict(used, strict=False)
-    frozen = {
-        _canonicalize(k)
-        for k, v in module.named_parameters(remove_duplicate=False)
-        if not v.requires_grad
-    }
-    loaded_canon = {_canonicalize(k) for k in used}
-    missing = [k for k in result.missing_keys if _canonicalize(k) not in frozen]
-    unmapped = [k for k in sd if _canonicalize(k) not in loaded_canon]
-
-    if missing or result.unexpected_keys or (unmapped and not allow_unmapped):
-        raise RuntimeError(
-            f"missing={missing}, unexpected={result.unexpected_keys}, unmapped={unmapped}"
-        )
-    return result
+    missing = [
+        n for n, p in module.named_parameters(remove_duplicate=False)
+        if p.requires_grad and n not in used
+    ]
+    if missing or unmapped:
+        raise RuntimeError(f"missing={missing}, unmapped={unmapped}")
+    return module.load_state_dict(used, strict=False)
 
 
 def to_numpy_img(frame: torch.Tensor) -> np.ndarray:
@@ -342,7 +302,6 @@ class Base(lightning.LightningModule):
         self,
         network: nn.Module,
         ckpt_path: str | None,
-        compile_mode: str | None,
         loss_fn: str,
         loss_beta: float | None = None,
         **kw,
@@ -357,57 +316,46 @@ class Base(lightning.LightningModule):
             "log_cosh": LogCoshLoss(),
             "smooth_l1": nn.SmoothL1Loss(reduction="none", beta=loss_beta),
         }[loss_fn]
-        ckpt_path = None if ckpt_path == "None" else ckpt_path
+        self.network = network
         if ckpt_path:
-            load_sd(network, torch.load(ckpt_path))
-        self.network = torch.compile(network, mode=compile_mode) if compile_mode else network
+            load_sd(self.network, torch.load(ckpt_path))
 
-    def _init_task_heads_and_metrics(
-        self,
-        vspw_head_path,
-        cityscapes_head_path,
-        kitti_head_path,
-        rgb_head_path,
-    ):
         head_configs = {
-            "vspw": (vspw_head_path, SegHead, {"num_classes": 124}, None),
-            "cityscapes": (cityscapes_head_path, SegHead, {"num_classes": 19}, None),
+            "vspw": (SegHead, {"num_classes": 124}),
+            "cityscapes": (SegHead, {"num_classes": 19}),
             "kitti": (
-                kitti_head_path,
                 DepthHead,
                 {"min_depth": KITTI_MIN_DEPTH, "max_depth": KITTI_MAX_DEPTH},
-                None,
+            ),
+            "rgb": (
+                RGBHead,
+                {
+                    "norm_weight": self.network.backbone.backbone.norm.weight,
+                    "norm_bias": self.network.backbone.backbone.norm.bias,
+                    "img_mean": self.network.backbone.processor.image_mean,
+                    "img_std": self.network.backbone.processor.image_std,
+                },
             ),
         }
         self.task_heads = nn.ModuleDict()
-        self.head_align = {}
-        for name, (path, head_cls, head_kw, align) in head_configs.items():
-            if path is None:
+        for name, (head_cls, head_kw) in head_configs.items():
+            env_var = f"{name.upper()}_HEAD_PATH"
+            path = os.environ.get(env_var)
+            if not path:
+                logging.info("Skipping %s head: %s not set", name, env_var)
                 continue
             head = head_cls(self.network.backbone.hidden_size, **head_kw)
-            load_sd(head, _extract_head_sd(torch.load(path)), allow_unmapped=True)
+            load_sd(head, torch.load(path))
             head.requires_grad_(False).eval()
             self.task_heads[name] = head
-            self.head_align[name] = align
-
-        self.rgb_head = None
-        if rgb_head_path is not None:
-            self.rgb_head = RGBHead(
-                self.network.backbone.hidden_size,
-                norm_weight=self.network.backbone.backbone.norm.weight,
-                norm_bias=self.network.backbone.backbone.norm.bias,
-                img_mean=self.network.backbone.processor.image_mean,
-                img_std=self.network.backbone.processor.image_std,
-            )
-            load_sd(
-                self.rgb_head,
-                _extract_head_sd(torch.load(rgb_head_path)),
-                allow_unmapped=True,
-            )
-            self.rgb_head.requires_grad_(False).eval()
 
         self.metrics = nn.ModuleDict()
         self.val_loss_sum, self.val_loss_count = defaultdict(float), defaultdict(int)
+
+    def setup(self, stage: str) -> None:
+        compile_on = stage == "fit" if self.use_compile is None else self.use_compile
+        if compile_on:
+            self.network = torch.compile(self.network)
 
     def configure_optimizers(self) -> dict:
         decay_types = (
@@ -522,11 +470,14 @@ class Base(lightning.LightningModule):
             self.val_loss_count.clear()
 
     def on_save_checkpoint(self, checkpoint: dict) -> None:
-        keep = {_canonicalize(n) for n, p in self.named_parameters() if p.requires_grad}
+        network = getattr(self.network, "_orig_mod", self.network)
         checkpoint["state_dict"] = {
-            k_canon: v
-            for k, v in self.state_dict().items()
-            if (k_canon := _canonicalize(k)) in keep
+            k: v
+            for k, v in network.state_dict().items()
+            if any(
+                p.requires_grad
+                for p in network.get_submodule(k.rpartition(".")[0]).parameters()
+            )
         }
 
     def _apply_head(
@@ -570,8 +521,6 @@ class Base(lightning.LightningModule):
         key: str,
         suffix: str,
     ) -> None:
-        if align_fn := self.head_align.get(dataset):
-            task_preds = align_fn(task_preds, labels)
         task_key = TASK_HEAD_KEY[type(head)]
         if dataset not in self.metrics:
             self.metrics[dataset] = nn.ModuleDict()
@@ -675,7 +624,7 @@ class Base(lightning.LightningModule):
         self._plot_feats(sample)
         if task_head := getattr(self.task_heads, sample["dataset_name"], None):
             self._plot_task(sample, task_head)
-        if self.rgb_head:
+        if "rgb" in self.task_heads:
             self._plot_rgb(sample)
 
     def _plot_feats(self, sample: dict) -> None: ...

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from datasets.base import VidTrainDataset
@@ -7,7 +8,6 @@ from datasets.storage import ZipFrameStore, ZipPrefetcher, load_local_paths
 class KineticsTrain(VidTrainDataset):
     def __init__(
         self,
-        root: str,
         exclude_list: str = "datasets/kinetics_excluded.txt",
         num_frames: int = 8,
         frame_size: int = 256,
@@ -25,8 +25,9 @@ class KineticsTrain(VidTrainDataset):
             ratio_jitter=ratio_jitter,
             scale=scale,
         )
+        root = os.environ["KINETICS_ROOT"]
         if root.endswith(".zip"):
-            # Pre-extracted frames in a zip archive
+            # Pre-extracted frames in a zip archive (optionally split into .part* files)
             self.store = ZipFrameStore(root)
             candidates = [vid for vid in self.store.vids if "train" in Path(vid).parts]
             self.samples = self._filter_excluded(candidates)
@@ -39,9 +40,12 @@ class KineticsTrain(VidTrainDataset):
             self.store = None
             first_item = next(next(Path(root, "train").iterdir()).iterdir())
             if first_item.is_dir():
-                candidates = sorted(set(
-                    str(Path(path).parent) for path in load_local_paths(root, "train/**/*.jpg")
-                ))
+                candidates = sorted(
+                    set(
+                        str(Path(path).parent)
+                        for path in load_local_paths(root, "train/**/*.jpg")
+                    )
+                )
             else:
                 candidates = load_local_paths(root, "train/**/*.mp4")
             self.samples = self._filter_excluded(candidates)
