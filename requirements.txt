@@ -7,5 +7,5 @@ torch==2.10.0
 torchvision==0.25.0
 torchmetrics==1.8.2
 decord==0.6.0
-transformers==5.0.0
+transformers==5.3.0
 opencv-python==4.13.0.90
