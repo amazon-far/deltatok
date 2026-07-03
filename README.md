@@ -27,8 +27,8 @@ ViT-B encoder and decoder trained on Kinetics-700. Reconstruction quality is mea
 
 | Horizon | VSPW mIoU (↑) | Cityscapes mIoU (↑) | KITTI RMSE (↓) |
 |---------|---------------|---------------------|----------------|
-| Short (1 frame) | 58.6 | 69.6 | 2.78 |
-| Mid (3 frames) | 58.5 | 67.9 | 2.86 |
+| Short (1 frame) | 58.5 | 69.7 | 2.80 |
+| Mid (3 frames) | 58.5 | 68.1 | 2.88 |
 
 ### DeltaWorld (Predictor) [![Download](https://img.shields.io/badge/Download-deltaworld--kinetics-FFD21E?labelColor=555)](https://huggingface.co/Amazon-FAR/deltaworld-kinetics)
 
@@ -37,9 +37,9 @@ ViT-B predictor trained on Kinetics-700. Prediction quality is measured by apply
 | Method | Horizon | VSPW mIoU (↑) | Cityscapes mIoU (↑) | KITTI RMSE (↓) |
 |--------|---------|---------------|---------------------|----------------|
 | *Copy last (lower bound)* | *Short (1 frame)* | *51.2* | *53.5* | *3.76* |
-| DeltaWorld | Short (1 frame) | 56.3 (54.2) | 66.2 (64.2) | 2.95 (3.32) |
+| DeltaWorld | Short (1 frame) | 56.1 (54.2) | 65.9 (64.3) | 2.97 (3.36) |
 | *Copy last (lower bound)* | *Mid (3 frames)* | *44.3* | *39.6* | *4.86* |
-| DeltaWorld | Mid (3 frames) | 51.5 (46.6) | 55.3 (49.5) | 3.71 (4.74) |
+| DeltaWorld | Mid (3 frames) | 51.0 (45.8) | 54.8 (49.8) | 3.76 (5.14) |
 
 ## Setup
 

@@ -1,17 +1,67 @@
 from itertools import chain
+from types import MethodType
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import AutoConfig
 from transformers.models.dinov3_vit.modeling_dinov3_vit import (
+    DINOv3ViTAttention,
     DINOv3ViTLayer,
     DINOv3ViTRopePositionEmbedding,
+    apply_rotary_pos_emb,
 )
 
-from models.gated_attn import enable_gated_attn
 from models.predictor import DINOV3_TEMPLATE
-from models.qk_norm import enable_dinov3_qk_norm
 from training.base import load_sd
+
+
+def _patch_dinov3_attn(attn: nn.Module, use_qk_norm: bool, use_gated_attn: bool) -> None:
+    if use_qk_norm:
+        eps = attn.config.layer_norm_eps
+        attn.q_norm_prerope = nn.LayerNorm(attn.head_dim, eps=eps, bias=False)
+        attn.k_norm_prerope = nn.LayerNorm(attn.head_dim, eps=eps, bias=False)
+    if use_gated_attn:
+        attn.attn_gate = nn.Linear(attn.config.hidden_size, attn.num_heads, bias=True)
+        nn.init.trunc_normal_(attn.attn_gate.weight, std=attn.config.initializer_range)
+        nn.init.zeros_(attn.attn_gate.bias)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        position_embeddings: tuple[torch.Tensor, torch.Tensor] | None = None,
+        **kw,
+    ):
+        batch_size, patches, _ = hidden_states.size()
+        q = self.q_proj(hidden_states)
+        k = self.k_proj(hidden_states)
+        v = self.v_proj(hidden_states)
+
+        q = q.view(batch_size, patches, self.num_heads, self.head_dim).transpose(1, 2)
+        k = k.view(batch_size, patches, self.num_heads, self.head_dim).transpose(1, 2)
+        v = v.view(batch_size, patches, self.num_heads, self.head_dim).transpose(1, 2)
+
+        if use_qk_norm:
+            q = self.q_norm_prerope(q)
+            k = self.k_norm_prerope(k)
+
+        if position_embeddings is not None:
+            cos, sin = position_embeddings
+            q, k = apply_rotary_pos_emb(q, k, cos, sin)
+
+        attn_output = F.scaled_dot_product_attention(
+            q, k, v, attn_mask=attention_mask, scale=self.scaling
+        )
+
+        if use_gated_attn:
+            gate = self.attn_gate(hidden_states).transpose(1, 2).unsqueeze(-1).sigmoid()
+            attn_output = attn_output * gate
+
+        attn_output = attn_output.transpose(1, 2).reshape(batch_size, patches, -1)
+        return self.o_proj(attn_output), None
+
+    attn.forward = MethodType(forward, attn)
 
 
 class DeltaTok(nn.Module):
@@ -67,10 +117,10 @@ class DeltaTok(nn.Module):
                         nn.init.zeros_(m.bias)
             blk.layer_scale1.lambda1.data.fill_(layer_scale_init)
             blk.layer_scale2.lambda1.data.fill_(layer_scale_init)
-            if use_qk_norm:
-                enable_dinov3_qk_norm(blk)
-            if use_gated_attn:
-                enable_gated_attn(blk)
+            if use_qk_norm or use_gated_attn:
+                for m in blk.modules():
+                    if isinstance(m, DINOv3ViTAttention):
+                        _patch_dinov3_attn(m, use_qk_norm, use_gated_attn)
 
         self.norm = nn.LayerNorm(self.backbone.hidden_size, cfg.layer_norm_eps)
 

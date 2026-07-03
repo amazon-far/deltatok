@@ -23,6 +23,8 @@ DATA_ERRORS = (
     DECORDError,
 )
 
+IGNORE_LABEL = 255
+
 
 def as_hw(frame_size: int | tuple[int, int]) -> tuple[int, int]:
     if isinstance(frame_size, int):
@@ -78,6 +80,15 @@ def extract_frames_and_timestamps(
     vr: VidReader | FrameReader, frame_indices: list[int]
 ) -> tuple[np.ndarray, torch.Tensor]:
     return vr.get_batch(frame_indices), vr.timestamps[frame_indices]
+
+
+def tail_anchored_indices(anchor: int, num_frames: int, stride: int) -> list[int]:
+    start = anchor - (num_frames - 1) * stride
+    if start < 0:
+        raise ValueError(
+            f"clip too short: need {num_frames} frames at stride {stride} ending at {anchor}"
+        )
+    return list(range(start, anchor + 1, stride))
 
 
 def compute_middle_frame_indices(
