@@ -18,6 +18,7 @@ from torchmetrics.classification import MulticlassJaccardIndex
 from torchmetrics.regression import MeanSquaredError
 
 import wandb
+from datasets.base import IGNORE_LABEL
 from datasets.kitti import MAX_DEPTH as KITTI_MAX_DEPTH
 from datasets.kitti import MIN_DEPTH as KITTI_MIN_DEPTH
 from models.task_heads import DepthHead, RGBHead, SegHead
@@ -28,7 +29,7 @@ GT_METRICS = {
     "depth": ["rmse"],
 }
 LABEL_VALID = {
-    "seg": lambda labels: (labels != 255).any(),
+    "seg": lambda labels: (labels != IGNORE_LABEL).any(),
     "depth": lambda labels: (labels > 0).any(),
 }
 
@@ -42,7 +43,7 @@ def _valid_depth(
 
 METRIC_FACTORIES = {
     "seg_miou": lambda h: MulticlassJaccardIndex(
-        h.head.out_channels, ignore_index=255, validate_args=False
+        h.head.out_channels, ignore_index=IGNORE_LABEL, validate_args=False
     ),
     "depth_rmse": lambda h: MeanSquaredError(squared=False),
 }

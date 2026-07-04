@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from datasets.base import VidValDataset, read_frame_paths
+from datasets.base import VidValDataset, read_frame_paths, tail_anchored_indices
 
 KB_CROP_HEIGHT = 352
 KB_CROP_WIDTH = 1216
@@ -67,11 +67,9 @@ class KITTIVal(VidValDataset):
                     continue
 
                 stride_frames = int(self.time_stride_seconds * self.fps)
-                start_idx = frame_num - (self.num_frames - 1) * stride_frames
-                if start_idx < 0:
-                    continue
-
-                frame_indices = list(range(start_idx, frame_num + 1, stride_frames))
+                frame_indices = tail_anchored_indices(
+                    frame_num, self.num_frames, stride_frames
+                )
                 img_dir = root / date / drive / "image_02" / "data"
                 depth_dir = self._find_depth_dir(root, drive)
                 if depth_dir is None:

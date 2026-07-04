@@ -5,11 +5,16 @@ import numpy as np
 import torch
 from PIL import Image
 
-from datasets.base import VidValDataset, read_frame_paths
+from datasets.base import (
+    IGNORE_LABEL,
+    VidValDataset,
+    read_frame_paths,
+    tail_anchored_indices,
+)
 
 FPS = 16.0
 
-_LABEL_TO_TRAIN = np.full(256, 255, dtype=np.int64)
+_LABEL_TO_TRAIN = np.full(256, IGNORE_LABEL, dtype=np.int64)
 for _id, _train in {
     7: 0, 8: 1, 11: 2, 12: 3, 13: 4, 17: 5, 19: 6, 20: 7, 21: 8, 22: 9,
     23: 10, 24: 11, 25: 12, 26: 13, 27: 14, 28: 15, 31: 16, 32: 17, 33: 18,
@@ -44,9 +49,9 @@ class CityscapesVal(VidValDataset):
                 "_gtFine_labelIds", ""
             ).split("_")
             frame_num = int(frame_num)
-            start = frame_num - (self.num_frames - 1) * stride_frames
-
-            frame_indices = list(range(start, frame_num + 1, stride_frames))
+            frame_indices = tail_anchored_indices(
+                frame_num, self.num_frames, stride_frames
+            )
             frame_paths = [
                 self.frames_dir
                 / label_path.parent.name
@@ -61,6 +66,8 @@ class CityscapesVal(VidValDataset):
     def _load_labels(self, label_data: Path) -> torch.Tensor:
         label_ids = np.array(Image.open(label_data), dtype=np.int64)
         label = torch.as_tensor(_LABEL_TO_TRAIN[label_ids])
-        labels = torch.full((self.num_frames, *label.shape), 255, dtype=torch.int64)
+        labels = torch.full(
+            (self.num_frames, *label.shape), IGNORE_LABEL, dtype=torch.int64
+        )
         labels[-1] = label
         return labels

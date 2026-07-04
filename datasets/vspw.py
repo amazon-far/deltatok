@@ -5,7 +5,12 @@ import numpy as np
 import torch
 from PIL import Image
 
-from datasets.base import VidValDataset, read_frame_paths
+from datasets.base import (
+    IGNORE_LABEL,
+    VidValDataset,
+    read_frame_paths,
+    tail_anchored_indices,
+)
 
 
 class VSPWVal(VidValDataset):
@@ -55,12 +60,9 @@ class VSPWVal(VidValDataset):
             )
 
             for label_idx in label_indices:
-                end_idx = label_idx
-                start_idx = end_idx - (self.num_frames - 1) * stride_frames
-                if start_idx < 0:
-                    continue
-
-                frame_indices = list(range(start_idx, end_idx + 1, stride_frames))
+                frame_indices = tail_anchored_indices(
+                    label_idx, self.num_frames, stride_frames
+                )
                 frame_paths = [str(img_files[i]) for i in frame_indices]
                 label_paths = [
                     labels_path / img_files[i].name.replace(".jpg", ".png")
@@ -78,6 +80,6 @@ class VSPWVal(VidValDataset):
             labels_frame = (
                 torch.from_numpy(np.array(Image.open(label_path), dtype=np.int64)) - 1
             )
-            labels_frame[(labels_frame < 0) | (labels_frame >= 124)] = 255
+            labels_frame[(labels_frame < 0) | (labels_frame >= 124)] = IGNORE_LABEL
             labels_list.append(labels_frame)
         return torch.stack(labels_list)
