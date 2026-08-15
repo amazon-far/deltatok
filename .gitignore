@@ -1,4 +1,9 @@
 .env
+.cache/
+.python/
+.venv/
+checkpoints/
+validation_data/
 datasets/.cache/
 
 __pycache__/

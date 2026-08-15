@@ -43,6 +43,9 @@ ViT-B predictor trained on Kinetics-700. Prediction quality is measured by apply
 
 ## Setup
 
+For a tested Apple Silicon M4 setup and a sub-1-GB KITTI validation workflow,
+see [APPLE_M4_VALIDATION.md](APPLE_M4_VALIDATION.md).
+
 Requires [Miniconda](https://docs.anaconda.com/miniconda/) (or Anaconda), a [Weights & Biases](https://wandb.ai/) account for logging, and a [Hugging Face](https://huggingface.co/) account. Accept the license at [facebook/dinov3-vitb16-pretrain-lvd1689m](https://huggingface.co/facebook/dinov3-vitb16-pretrain-lvd1689m) so the gated DINOv3 ViT-B backbone downloads automatically on first run.
 
 ```bash

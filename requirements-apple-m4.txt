@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Used only by scripts/prepare_kitti_m4_subset.py to extract selected files
+# from the official KITTI ZIP archives without downloading the full datasets.
+remotezip==0.12.3
